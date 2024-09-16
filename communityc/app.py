@@ -7,20 +7,30 @@ from models import User, db, Service, Booking, Pricing
 from datetime import datetime, timedelta
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-import base64, requests 
+import base64, requests
+import psycopg2
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
+# JWT secret key
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'default_secret_key')
 
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///communityc.db"
+# PostgreSQL database configuration
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+    'DATABASE_URL',
+    'postgresql://postgres:munezz456@localhost:5432/communityc'
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize JWT
 jwt = JWTManager(app)
 
+# Initialize and configure the database
 migrate = Migrate(app, db)
 db.init_app(app)
 
+# Secret key for the app
 secret_key = os.urandom(32)
 app.secret_key = secret_key
 print(secret_key)
@@ -145,7 +155,7 @@ def create_user():
     hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
     
     # Create a new user instance with the hashed password
-    new_user = User(firstname=data['firstname'],lastname=data['lastname'],username=data['username'], password=hashed_password, email=data['email'], phone_number=data['phone_number'],)
+    new_user = User(firstname=data['firstname'],lastname=data['lastname'],username=data['username'], password=hashed_password, email=data['email'], phone_number=data['phone_number'], location=data['location'],)
 
     try:
         db.session.add(new_user)
@@ -153,7 +163,7 @@ def create_user():
 
         # Create JWT token with user ID
         access_token = create_access_token(identity=str(new_user.id))
-        return jsonify(access_token=access_token), 201
+        return jsonify(access_token=access_token), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
@@ -473,58 +483,129 @@ def delete_pricing(service_id):
 
 @app.route('/bookings', methods=['POST'])
 def create_booking():
-    data = request.get_json()
-    # booking_date = datetime.strptime(data['booking_date'], '%Y-%m-%d').date()
+    try:
+        data = request.get_json()
 
-    new_booking = Booking(
-        username=data['username'],
-        email=data['email'],
-        service_name=data['service_name'],
-        booking_date=data['booking_date'],
-        booking_time=data['booking_time']
-    )
+        # Check for required fields
+        required_fields = ['name', 'email', 'phone_number', 'service_name', 'date', 'time', 'service_difficulty', 'price']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
 
-    db.session.add(new_booking)
-    db.session.commit()
-    return jsonify({'message': 'Booking created successfully'}), 200
+        # Create a new booking
+        new_booking = Booking(
+            name=data['name'],
+            email=data['email'],
+            phone_number=data['phone_number'],
+            county=data.get('county'),
+            town=data.get('town'),
+            street=data.get('street'),
+            service_name=data['service_name'],
+            date=data['date'],
+            time=data['time'],
+            service_difficulty=data['service_difficulty'],
+            price=data['price'],
+            additional_info=data.get('additional_info')
+        )
+
+        # Add to the database
+        db.session.add(new_booking)
+        db.session.commit()
+
+        return jsonify({'message': 'Booking created successfully'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/bookings', methods=['GET'])
 def get_bookings():
     bookings = Booking.query.all()
-    booking_list = []   
+    booking_list = []
     for booking in bookings:
         booking_list.append({
             'id': booking.id,
             'user_id': booking.user_id,
-            'username':booking.username,
-            'email':booking.email,
-            'booking_date': booking.booking_date,
-            'booking_time': booking.booking_time
+            'service_id': booking.service_id,
+            'name': booking.name,
+            'email': booking.email,
+            'phone_number': booking.phone_number,
+            'county': booking.county,
+            'town': booking.town,
+            'street': booking.street,
+            'service_name': booking.service_name,
+            'date': booking.date,
+            'time': booking.time,
+            'service_difficulty': booking.service_difficulty,
+            'price': booking.price,
+            'additional_info': booking.additional_info
         })
-    return jsonify({'bookings': booking_list})
+    return jsonify({'bookings': booking_list}), 200
+
+@app.route('/booking/<int:id>', methods=['GET'])
+def get_booking_by_id(id):
+    booking = Booking.query.get(id)
+    if booking:
+        booking_data = {
+            'id': booking.id,
+            'user_id': booking.user_id,
+            'service_id': booking.service_id,
+            'name': booking.name,
+            'email': booking.email,
+            'phone_number': booking.phone_number,
+            'county': booking.county,
+            'town': booking.town,
+            'street': booking.street,
+            'service_name': booking.service_name,
+            'date': booking.date,
+            'time': booking.time,
+            'service_difficulty': booking.service_difficulty,
+            'price': booking.price,
+            'additional_info': booking.additional_info
+        }
+        return jsonify({'booking': booking_data}), 200
+    else:
+        return jsonify({'error': 'Booking not found'}), 404
 
 @app.route('/booking/<string:username>', methods=['GET'])
 def get_booking_by_username(username):
     try:
-        booking = Booking.query.filter_by(username=username).first()
+        booking = Booking.query.filter_by(name=username).first()
 
         if booking:
-            user_data = {
+            booking_data = {
                 'id': booking.id,
-                'firstname': booking.username,
-                'service_name': booking.service_name,
-                "booking_date": booking.booking_date,
-                "booking_time": booking.booking_time,
+                'user_id': booking.user_id,
+                'service_id': booking.service_id,
+                'name': booking.name,
                 'email': booking.email,
-                'phone_number': booking.phone_number, 
+                'phone_number': booking.phone_number,
+                'county': booking.county,
+                'town': booking.town,
+                'street': booking.street,
+                'service_name': booking.service_name,
+                'date': booking.date,
+                'time': booking.time,
+                'service_difficulty': booking.service_difficulty,
+                'price': booking.price,
+                'additional_info': booking.additional_info
             }
 
-            return jsonify({'booking': user_data}), 200
+            return jsonify({'booking': booking_data}), 200
         else:
-            return jsonify({'error': 'User not found'}), 404
+            return jsonify({'error': 'Booking not found'}), 404
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# @app.route('/booking/<int:id>', methods=['DELETE'])
+# def delete_booking(id):
+#     booking = Booking.query.get(id)
+#     if booking:
+#         db.session.delete(booking)
+#         db.session.commit()
+#         return jsonify({'message': 'Booking deleted successfully'}), 200
+#     else:
+#         return jsonify({'error': 'Booking not found'}), 404
 
 @app.route('/admin/bookings', methods=['GET'])
 def get_all_bookings():

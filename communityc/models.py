@@ -3,7 +3,6 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
-
 class User(db.Model):
     __tablename__ = 'user'
     id = db.Column(db.Integer, primary_key=True)
@@ -12,14 +11,14 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(128), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    phone_number = db.Column(db.Integer(), unique=True, nullable=False)
+    phone_number = db.Column(db.String(15), unique=True, nullable=False)  # Changed to String for better compatibility
     location = db.Column(db.String(50), nullable=False)
 
 class Service(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=False)
-    image = db.Column(db.String(200), nullable=False)
+    image = db.Column(db.String(10000), nullable=False)
     category = db.Column(db.String(100), nullable=False)
 
     def __repr__(self):
@@ -28,27 +27,24 @@ class Service(db.Model):
 class Pricing(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
-    service = db.relationship('Service', backref=db.backref('pricing', lazy=True))
-    
-    # Pricing fields for each type of service
     small_service_price = db.Column(db.Float, nullable=False)
     medium_service_price = db.Column(db.Float, nullable=False)
     hard_service_price = db.Column(db.Float, nullable=False)
 
 class Booking(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
     name = db.Column(db.String(80), nullable=False)
     email = db.Column(db.String(120), nullable=False)
-    phone_number = db.Column(db.Integer, nullable=False)
-    location = db.Column(db.String, nullable=False)
+    phone_number = db.Column(db.String(15), nullable=False)
+    county = db.Column(db.String(100), nullable=True)
+    town = db.Column(db.String(100), nullable=True)
+    street = db.Column(db.String(100), nullable=True)
+    service_name = db.Column(db.String(100), nullable=False)
     date = db.Column(db.String(10), nullable=False)
     time = db.Column(db.String(5), nullable=False)
+    service_difficulty = db.Column(db.String(10), nullable=False)
+    price = db.Column(db.String(10), nullable=False)
     additional_info = db.Column(db.String(200))
-
-    user = db.relationship('User', foreign_keys=[user_id], backref='bookings')
-    service = db.relationship('Service', backref='bookings')
 
 class Review(db.Model):
     __tablename__ ='review'
