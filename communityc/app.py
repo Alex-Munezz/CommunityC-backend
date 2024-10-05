@@ -3,7 +3,7 @@ from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
-from models import User, db, Service, Booking, Pricing, Subcategory
+from models import User, db, Service, Booking, Pricing, Subcategory, Feedback, ServiceProvider
 from datetime import datetime, timedelta
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -152,30 +152,58 @@ def login():
     username = data.get('username')
     password = data.get('password')
 
+    # Fetch the user by username
     user = User.query.filter_by(username=username).first()
-    if user and check_password_hash(user.password, password):
-        access_token = create_access_token(identity=user.id, expires_delta=timedelta(minutes=30))
-        return jsonify(access_token=access_token), 200
     
+    # Validate credentials
+    if user and check_password_hash(user.password, password):
+        # Create access token with user id and role
+        access_token = create_access_token(
+            identity={
+                'id': user.id
+            },
+            expires_delta=timedelta(minutes=30)
+        )
+        return jsonify({
+            'access_token': access_token,
+        }), 200
+
     return jsonify({"message": "Invalid credentials"}), 401
 
 # Create account route with JWT
 @app.route('/create_account', methods=['POST'])
 def create_user():
     data = request.json
-    
+
     # Hash the user's password
     hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
-    
-    # Create a new user instance with the hashed password
-    new_user = User(firstname=data['firstname'],lastname=data['lastname'],username=data['username'], password=hashed_password, email=data['email'], phone_number=data['phone_number'], location=data['location'],)
+
+    # Create a new user instance with the hashed password and role
+    new_user = User(
+        firstname=data['firstname'],
+        lastname=data['lastname'],
+        username=data['username'],
+        password=hashed_password,
+        email=data['email'],
+        phone_number=data['phone_number'],
+        location=data['location'],
+    )
 
     try:
         db.session.add(new_user)
         db.session.commit()
 
-        # Create JWT token with user ID
-        access_token = create_access_token(identity=str(new_user.id))
+        # Create JWT token with user ID and role
+        access_token = create_access_token(identity={'id': new_user.id})
+
+        # Send confirmation email
+        msg = Message(
+            subject='Account Created Successfully',
+            recipients=[new_user.email],
+            body=f'Hello {new_user.firstname},\n\nYour CommunityCrafters account has been created successfully! We warmly welcome you to our marketplace.\n\nBest regards,\nThe CommunityCrafters Team'
+        )
+        mail.send(msg)
+
         return jsonify(access_token=access_token), 200
     except Exception as e:
         db.session.rollback()
@@ -186,7 +214,7 @@ def create_user():
 def get_users():
     users = User.query.all()
     user_list = [{'id': user.id, 'firstname': user.firstname, 'lastname': user.lastname, 'username': user.username,
-                 'email': user.email, 'phone_number': user.phone_number} for user in users]
+                 'email': user.email,'location':user.location, 'phone_number': user.phone_number} for user in users]
     return jsonify(user_list)
 
 # Get a specific user by ID
@@ -200,7 +228,8 @@ def get_user(id):
             'lastname': user.lastname,
             'username': user.username,
             'email': user.email,
-            'phone_number': user.phone_number
+            'phone_number': user.phone_number,
+            "location" : user.location
         })
     return jsonify({'message': 'User not found'}), 404
 
@@ -217,7 +246,7 @@ def get_user_by_username(username):
                 'lastname': user.lastname,
                 'username': user.username,
                 'email': user.email,
-                'phone_number': user.phone_number, 
+                'phone_number': user.phone_number
             }
 
             return jsonify({'user': user_data}), 200
@@ -475,10 +504,11 @@ def delete_pricing(id):
 
 
 @app.route('/bookings', methods=['POST'])
+@jwt_required()
 def create_booking():
     try:
         data = request.get_json()
-
+        current_user = get_jwt_identity()
         # Check for required fields
         required_fields = ['name', 'email', 'phone_number', 'county', 'town', 'street', 'service_name', 'date', 'time', 'subcategory', 'price', 'additional_info']
         for field in required_fields:
@@ -504,9 +534,10 @@ def create_booking():
             service_name=data['service_name'],
             date=data['date'],
             time=data['time'],
-            subcategory=",".join(data['subcategory']),
+            subcategory=(data['subcategory']),
             price=data['price'],
-            additional_info=data.get('additional_info')
+            additional_info=data.get('additional_info'),
+            user_id=current_user
         )
 
         # Add the booking to the database
@@ -524,9 +555,9 @@ def create_booking():
 def send_booking_confirmation_email(email, name, booking):
     try:
         msg = Message(
-            subject="Booking Confirmation",
+            subject="Service Booking Confirmation",
             recipients=[email],  # The recipient's email address
-            body=f"Dear {name},\n\nYour booking for {booking.service_name} on {booking.date} at {booking.time} has been confirmed. \nThe Total price for your service is {booking.price} Kshs. Please pay it to the following till number : 00100 two days before your booking date then reply to this email and attach confirmation message from Mpesa as a screenshot so as we can confirm it on our side. Failure to do so, we will cancel your booking. \n\n Thank you for choosing CommunityCrafters, your no. 1 marketplace for all your services!\n\nFor any questions, inquiries or changing the time/date of your booking, feel free to reply to this email or call +254768453442\n\nBest regards,\nThe CommunityCrafters Team"
+            body=f"Dear {name},\n\nYour booking for {booking.service_name} on {booking.date} at {booking.time} has been confirmed. \n\nThe Total price for your service is {booking.price} Kshs. Please pay it to the following till number : 00100 two days before your booking date then reply to this email and attach confirmation message from Mpesa as a screenshot so as we can confirm it on our side.\n\n Failure to do so, will lead to cancelation of your booking. \n If there will be a change of price depending on the additional information you provided, we will inform you before the 2 days expire.\n\n Thank you for choosing CommunityCrafters, your no. 1 marketplace for all your services!\n\nFor any questions, inquiries or changing the time/date of your booking, feel free to reply to this email or call +254768453442\n\nBest regards,\nThe CommunityCrafters Team."
         )
         mail.send(msg)
         print(f"Confirmation email sent to {email}")
@@ -608,6 +639,17 @@ def get_booking_by_username(username):
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/bookings/user/<int:user_id>', methods=['GET'])
+@jwt_required()  # Require a valid JWT token
+def get_user_bookings(user_id):
+    current_user = get_jwt_identity() 
+
+    # Query the database for bookings related to the user ID
+    bookings = Booking.query.filter_by(user_id=user_id).all()
+    bookings_data = [{"id": booking.id, "service_name": booking.service_name, "price": booking.price, "date": booking.date, "time": booking.time, "county":booking.county, "town":booking.town, "street":booking.street, "subcategory":booking.subcategory} for booking in bookings]
+
+    return jsonify({"bookings": bookings_data}), 200        
 
 @app.route('/bookings/<int:booking_id>', methods=['DELETE'])
 def delete_booking(booking_id):
@@ -701,48 +743,112 @@ def delete_subcategory(id):
     db.session.commit()
     return jsonify({'message': 'Subcategory deleted successfully'}), 204
 
-@app.route('/admin/bookings', methods=['GET'])
-def get_all_bookings():
-    bookings = Booking.query.all()
-    return jsonify([booking.to_dict() for booking in bookings])
+@app.route('/feedback', methods=['GET'])
+def get_feedback():
+    feedback_list = Feedback.query.all()  # Fetch all feedback
+    feedback_data = [
+        {
+            'id': feedback.id,
+            'name': feedback.name,
+            'email': feedback.email,
+            'subject': feedback.subject,
+            'message': feedback.message,
+        }
+        for feedback in feedback_list
+    ]
+    return jsonify(feedback_data), 200
 
-# Route to get all users
-@app.route('/admin/users', methods=['GET'])
-def get_all_users():
-    users = User.query.all()
-    user_list = [{'id': user.id, 'firstname': user.firstname, 'lastname': user.lastname, 'username': user.username,
-                 'email': user.email, 'phone_number': user.phone_number} for user in users]
-    return jsonify(user_list)
 
-# Route to delete a booking
-# @app.route('/admin/bookings/<int:booking_id>', methods=['DELETE'])
-# def delete_booking(booking_id):
-#     booking = Booking.query.get(booking_id)
-#     if booking:
-#         db.session.delete(booking)
-#         db.session.commit()
-#         return jsonify({'message': 'Booking deleted successfully'})
-#     return jsonify({'message': 'Booking not found'}), 404
-
-# Route to update a booking
-# @app.route('/admin/bookings/<int:booking_id>', methods=['PUT'])
-# def update_booking(booking_id):
-#     data = request.json
-#     booking = Booking.query.get(booking_id)
-#     if booking:
-#         booking.status = data.get('status', booking.status)
-#         db.session.commit()
-#         return jsonify({'message': 'Booking updated successfully'})
-#     return jsonify({'message': 'Booking not found'}), 404
-
-# Route to add a new booking
-@app.route('/admin/bookings', methods=['POST'])
-def add_booking():
+@app.route('/feedback', methods=['POST'])
+def submit_feedback():
     data = request.json
-    new_booking = Booking(**data)
-    db.session.add(new_booking)
+
+    new_feedback = Feedback(
+        name=data['name'],
+        email=data['email'],
+        subject=data['subject'],
+        message=data['message']
+    )
+
+    try:
+        db.session.add(new_feedback)
+        db.session.commit()
+        return jsonify({'message': 'Feedback submitted successfully!'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 400  
+
+@app.route('/feedback/<int:feedback_id>', methods=['DELETE'])
+def delete_feedback(feedback_id):
+    feedback_to_delete = Feedback.query.get(feedback_id)  # Fetch feedback by ID
+    if not feedback_to_delete:
+        return jsonify({'error': 'Feedback not found'}), 404
+
+    try:
+        db.session.delete(feedback_to_delete)  # Delete feedback
+        db.session.commit()
+        return jsonify({'message': 'Feedback deleted successfully!'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/service_providers', methods=['POST'])
+def create_service_provider():
+    data = request.json
+    new_provider = ServiceProvider(
+        name=data['name'],
+        phone_number=data['phone_number'],
+        email=data['email'],
+        service_id=data['service_id'],
+        location=data['location']
+    )
+    db.session.add(new_provider)
     db.session.commit()
-    return jsonify({'message': 'Booking added successfully'}), 201   
+    return jsonify({"msg": "Service provider created", "provider": new_provider.id}), 201
+
+# Route to get all service providers
+@app.route('/service_providers', methods=['GET'])
+def get_service_providers():
+    providers = ServiceProvider.query.all()
+    providers_data = [{"id": provider.id, "name": provider.name, "phone_number": provider.phone_number, "email": provider.email, "service_id": provider.service_id, "location":provider.location} for provider in providers]
+    return jsonify({"providers": providers_data}), 200
+
+# Route to get a specific service provider by ID
+@app.route('/service_providers/<int:provider_id>', methods=['GET'])
+def get_service_provider(provider_id):
+    provider = ServiceProvider.query.get_or_404(provider_id)
+    provider_data = {
+        "id": provider.id,
+        "name": provider.name,
+        "phone_number": provider.phone_number,
+        "email": provider.email,
+        "service_id": provider.service_id,
+        "location":provider.location
+    }
+    return jsonify(provider_data), 200
+
+# Route to update a service provider
+@app.route('/service_providers/<int:provider_id>', methods=['PUT'])
+def update_service_provider(provider_id):
+    provider = ServiceProvider.query.get_or_404(provider_id)
+    data = request.json
+
+    provider.name = data.get('name', provider.name)
+    provider.phone_number = data.get('phone_number', provider.phone_number)
+    provider.email = data.get('email', provider.email)
+    provider.service_id = data.get('service_id', provider.service_id)
+    provider.location = data.get('location', provider.location)
+
+    db.session.commit()
+    return jsonify({"msg": "Service provider updated"}), 200
+
+# Route to delete a service provider
+@app.route('/service_providers/<int:provider_id>', methods=['DELETE'])
+def delete_service_provider(provider_id):
+    provider = ServiceProvider.query.get_or_404(provider_id)
+    db.session.delete(provider)
+    db.session.commit()
+    return jsonify({"msg": "Service provider deleted"}), 200
 
 if __name__ == '__main__':
   app.run(debug=True, port=5000)

@@ -13,7 +13,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     phone_number = db.Column(db.String(15), unique=True, nullable=False) 
     location = db.Column(db.String(50), nullable=False)
-
+    
 class Service(db.Model):
     __tablename__ = 'service'
     id = db.Column(db.Integer, primary_key=True)
@@ -23,6 +23,7 @@ class Service(db.Model):
     category = db.Column(db.String(100), nullable=False)
 
     subcategories = db.relationship('Subcategory', backref='service', lazy=True)
+    providers = db.relationship('ServiceProvider', backref='service', lazy=True)
 
     def __repr__(self):
         return f'<Service {self.name}>'
@@ -36,6 +37,16 @@ class Subcategory(db.Model):
     def __repr__(self):
         return f'<Subcategory {self.name}>'
 
+class ServiceProvider(db.Model):
+    __tablename__ = 'service_providers'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    phone_number = db.Column(db.String(15), nullable=False)
+    email = db.Column(db.String(120), nullable=False, unique=True)
+    service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
+    location = db.Column(db.String(100), nullable=False)
+
 class Pricing(db.Model):
     __tablename__ = 'pricing'
     id = db.Column(db.Integer, primary_key=True)
@@ -48,8 +59,20 @@ class Pricing(db.Model):
     def __repr__(self):
         return f'<Pricing {self.price} for subcategory {self.subcategory.name}>'
 
+class Feedback(db.Model):
+    __tablename__ = 'feedback'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), nullable=False)
+    subject = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+
+    def __repr__(self):
+        return f'<Feedback {self.name}>'
+
 class Booking(db.Model):
     __tablename__ = 'booking'
+    
     id = db.Column(db.Integer, primary_key=True)
     service_name = db.Column(db.String(100), nullable=False)  
     name = db.Column(db.String(80), nullable=False)
@@ -63,6 +86,13 @@ class Booking(db.Model):
     subcategory = db.Column(db.String(100), nullable=False)
     price = db.Column(db.String(10), nullable=False)
     additional_info = db.Column(db.String(200))
+
+    # Adding user_id to link booking to user
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Assuming the User model has an id field
+
+    # Optional: Establish relationship with User model
+    user = db.relationship('User', backref='bookings')  # Assuming you have a User model
+
 
 class Review(db.Model):
     __tablename__ ='review'
