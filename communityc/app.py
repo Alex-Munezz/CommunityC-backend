@@ -11,7 +11,10 @@ import base64, requests
 import psycopg2
 
 
-app = Flask(__name__)
+app = Flask(__name__,
+            static_url_path='',
+            static_folder='../frontend/communityc/build',
+            template_folder='../frontend/communityc/build')
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # JWT secret key
