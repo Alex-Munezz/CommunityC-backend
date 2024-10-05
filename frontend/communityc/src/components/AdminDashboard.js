@@ -15,7 +15,7 @@ const AdminDashboard = () => {
     useEffect(() => {
         const fetchBookings = async () => {
             try {
-                const response = await fetch('http://127.0.0.1:5000/bookings');
+                const response = await fetch('/bookings');
                 if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.json();
                 setBookings(Array.isArray(data.bookings) ? data.bookings : []);
@@ -26,7 +26,7 @@ const AdminDashboard = () => {
 
         const fetchUsers = async () => {
             try {
-                const response = await fetch('http://127.0.0.1:5000/users');
+                const response = await fetch('/users');
                 if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.json();
                 setUsers(data);
@@ -37,7 +37,7 @@ const AdminDashboard = () => {
 
         const fetchFeedback = async () => {
             try {
-                const response = await fetch('http://127.0.0.1:5000/feedback');
+                const response = await fetch('/feedback');
                 if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.json();
                 setFeedback(data);
@@ -48,7 +48,7 @@ const AdminDashboard = () => {
 
         const fetchServiceProviders = async () => {
             try {
-                const response = await fetch('http://127.0.0.1:5000/service-providers');
+                const response = await fetch('/service-providers');
                 if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.json();
                 setServiceProviders(data); // Set the service providers data
@@ -66,7 +66,7 @@ const AdminDashboard = () => {
 
     const handleDeleteBooking = async (bookingId) => {
         try {
-            const response = await fetch(`http://127.0.0.1:5000/bookings/${bookingId}`, { method: 'DELETE' });
+            const response = await fetch(`/bookings/${bookingId}`, { method: 'DELETE' });
             if (!response.ok) throw new Error('Network response was not ok');
             setBookings(bookings.filter(booking => booking.id !== bookingId));
         } catch (error) {
@@ -76,7 +76,7 @@ const AdminDashboard = () => {
 
     const handleDeleteFeedback = async (feedbackId) => {
         try {
-            const response = await fetch(`http://127.0.0.1:5000/feedback/${feedbackId}`, { method: 'DELETE' });
+            const response = await fetch(`/feedback/${feedbackId}`, { method: 'DELETE' });
             if (!response.ok) throw new Error('Network response was not ok');
             setFeedback(feedback.filter(item => item.id !== feedbackId)); // Update feedback state
         } catch (error) {
@@ -86,7 +86,7 @@ const AdminDashboard = () => {
 
     const handleUpdateBooking = async (bookingId) => {
         try {
-            const response = await fetch(`http://127.0.0.1:5000/bookings/${bookingId}`, {
+            const response = await fetch(`/bookings/${bookingId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -196,7 +196,7 @@ const AdminDashboard = () => {
                                 <div>Booking Subcategory: {booking.subcategory}</div>
                                 <div>Price: {booking.price}</div>
                                 <div>Booking Date: {booking.date} at {booking.time}</div>
-                                
+                                <div>Additional Imformation: {booking.additional_information}</div>
                                 <button 
                                     onClick={() => handleDeleteBooking(booking.id)} 
                                     className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"

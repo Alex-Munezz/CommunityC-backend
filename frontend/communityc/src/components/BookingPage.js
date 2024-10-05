@@ -48,7 +48,7 @@ const BookingPage = () => {
   const fetchServicePricing = async (selectedSubcategoryId) => {
     try {
       setLoading(true);
-      const response = await fetch(`http://127.0.0.1:5000/pricing?service_id=${formData.service_name}&subcategory_id=${selectedSubcategoryId}`);
+      const response = await fetch(`/pricing?service_id=${formData.service_name}&subcategory_id=${selectedSubcategoryId}`);
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Error fetching pricing:', errorData);
@@ -67,7 +67,7 @@ const BookingPage = () => {
   const fetchSubcategories = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`http://127.0.0.1:5000/subcategories?service_name=${formData.service_name}`);
+      const response = await fetch(`/subcategories?service_name=${formData.service_name}`);
       if (!response.ok) throw new Error('Failed to fetch subcategories');
       const data = await response.json();
       setSubcategories(data);
@@ -218,7 +218,7 @@ const BookingPage = () => {
         setError('User not authenticated');
         return;
     }
-      const response = await fetch('http://127.0.0.1:5000/bookings', {
+      const response = await fetch('/bookings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

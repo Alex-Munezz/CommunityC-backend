@@ -32,7 +32,7 @@ const SignUp = () => {
 
     try {
       // Send a POST request to your Flask backend on localhost
-      const response = await fetch('http://localhost:5000/create_account', {
+      const response = await fetch('/create_account', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
