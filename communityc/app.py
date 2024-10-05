@@ -503,12 +503,21 @@ def delete_pricing(id):
     return jsonify({'message': 'Pricing entry deleted successfully'}), 204
 
 
+from datetime import datetime
+import re
+from flask import jsonify, request
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from models import Booking, Service, Subcategory  # Assuming these models exist
+from app import db, mail
+from flask_mail import Message
+
 @app.route('/bookings', methods=['POST'])
 @jwt_required()
 def create_booking():
     try:
         data = request.get_json()
         current_user = get_jwt_identity()
+
         # Check for required fields
         required_fields = ['name', 'email', 'phone_number', 'county', 'town', 'street', 'service_name', 'date', 'time', 'subcategory', 'price', 'additional_info']
         for field in required_fields:
@@ -519,10 +528,35 @@ def create_booking():
         if '@' not in data['email']:
             return jsonify({'error': 'Invalid email format'}), 400
 
-        # Validate phone number format
-        if not data['phone_number'].isdigit() or len(data['phone_number']) < 10:
-            return jsonify({'error': 'Invalid phone number'}), 400
+        # Validate phone number format (Kenyan phone numbers, starting with 07 or +254)
+        phone_pattern = re.compile(r'^(?:\+254|07|01)\d{8}$')
+        if not phone_pattern.match(data['phone_number']):
+            return jsonify({'error': 'Invalid phone number format'}), 400
 
+        # Validate date format and ensure it's not in the past
+        try:
+            booking_date = datetime.strptime(data['date'], "%Y-%m-%d")
+            if booking_date < datetime.now():
+                return jsonify({'error': 'Booking date cannot be in the past'}), 400
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Expected format: YYYY-MM-DD'}), 400
+
+        # Validate service name exists in the database
+        service = Service.query.filter_by(name=data['service_name']).first()
+        if not service:
+            return jsonify({'error': 'Invalid service name'}), 400
+
+        # Validate subcategory exists and belongs to the specified service
+        subcategories = data['subcategory'] if isinstance(data['subcategory'], list) else [data['subcategory']]
+        invalid_subcategories = []
+        
+        for subcat in subcategories:
+            subcategory = Subcategory.query.filter_by(name=subcat, service_id=service.id).first()
+            if not subcategory:
+                invalid_subcategories.append(subcat)
+
+        if invalid_subcategories:
+            return jsonify({'error': f'Invalid subcategories for this service: {", ".join(invalid_subcategories)}'}), 400
         # Create a new booking
         new_booking = Booking(
             name=data['name'],
@@ -534,23 +568,53 @@ def create_booking():
             service_name=data['service_name'],
             date=data['date'],
             time=data['time'],
-            subcategory=(data['subcategory']),
+            subcategory=','.join(data['subcategory']) if isinstance(data['subcategory'], list) else data['subcategory'],
             price=data['price'],
             additional_info=data.get('additional_info'),
-            user_id=current_user
+            user_id=current_user['id']  # Correct user_id assignment
         )
 
         # Add the booking to the database
-        db.session.add(new_booking)
-        db.session.commit()
+        try:
+            db.session.add(new_booking)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': 'Database error: ' + str(e)}), 500
 
         # Send confirmation email to the user
-        send_booking_confirmation_email(data['email'], data['name'], new_booking)
+        email_sent = send_booking_confirmation_email(data['email'], data['name'], new_booking)
 
-        return jsonify({'message': 'Booking created successfully', 'booking_id': new_booking.id}), 200
+        # Respond with booking details and email status
+        if email_sent:
+            return jsonify({'message': 'Booking created successfully, and confirmation email sent', 'booking_id': new_booking.id}), 200
+        else:
+            return jsonify({'message': 'Booking created successfully, but failed to send confirmation email', 'booking_id': new_booking.id}), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def send_booking_confirmation_email(email, name, booking):
+    try:
+        msg = Message(
+            subject="Service Booking Confirmation",
+            recipients=[email],  # The recipient's email address
+            body=f"Dear {name},\n\nYour booking for {booking.service_name} on {booking.date} at {booking.time} has been confirmed.\n\n"
+                 f"The total price for your service is {booking.price} Kshs. Please pay to the following till number: 00100 two days before your booking date, "
+                 f"then reply to this email and attach the confirmation message from Mpesa as a screenshot so we can confirm it on our side.\n\n"
+                 f"Failure to do so will lead to the cancellation of your booking.\nIf there is a change in price depending on the additional information you provided, "
+                 f"we will inform you before the two days expire.\n\n"
+                 f"Thank you for choosing CommunityCrafters, your no. 1 marketplace for all your services!\n\n"
+                 f"For any questions, inquiries, or changing the time/date of your booking, feel free to reply to this email or call +254768453442.\n\n"
+                 f"Best regards,\nThe CommunityCrafters Team."
+        )
+        mail.send(msg)
+        print(f"Confirmation email sent to {email}")
+        return True  # Email sent successfully
+    except Exception as e:
+        print(f"Failed to send email: {str(e)}")
+        return False  # Email failed to send
+
 
 def send_booking_confirmation_email(email, name, booking):
     try:
@@ -792,7 +856,7 @@ def delete_feedback(feedback_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
 
-@app.route('/service_providers', methods=['POST'])
+@app.route('/service-providers', methods=['POST'])
 def create_service_provider():
     data = request.json
     new_provider = ServiceProvider(
@@ -807,11 +871,22 @@ def create_service_provider():
     return jsonify({"msg": "Service provider created", "provider": new_provider.id}), 201
 
 # Route to get all service providers
-@app.route('/service_providers', methods=['GET'])
+@app.route('/service-providers', methods=['GET'])
 def get_service_providers():
-    providers = ServiceProvider.query.all()
-    providers_data = [{"id": provider.id, "name": provider.name, "phone_number": provider.phone_number, "email": provider.email, "service_id": provider.service_id, "location":provider.location} for provider in providers]
-    return jsonify({"providers": providers_data}), 200
+    service_providers = ServiceProvider.query.all()
+    providers_data = [
+        {
+            "id": provider.id,
+            "name": provider.name,
+            "email": provider.email,
+            "phone_number": provider.phone_number,
+            "location":provider.location,
+            "service_id":provider.service_id
+        }
+        for provider in service_providers
+    ]
+    return jsonify(providers_data), 200
+
 
 # Route to get a specific service provider by ID
 @app.route('/service_providers/<int:provider_id>', methods=['GET'])
