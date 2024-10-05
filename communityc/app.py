@@ -1,5 +1,5 @@
 import os
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
@@ -9,6 +9,7 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 from werkzeug.security import generate_password_hash, check_password_hash
 import base64, requests
 import psycopg2
+
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
@@ -145,6 +146,10 @@ def process_payment():
     response = requests.post(MPESA_API_URL, headers=headers, json=payload)
     return jsonify(response.json())
 
+
+@app.route("/", methods= ["GET"])
+def display():
+    return render_template("index.html")
 
 @app.route('/login', methods=['POST'])
 def login():
