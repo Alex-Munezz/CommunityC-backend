@@ -196,7 +196,7 @@ const AdminDashboard = () => {
                                 <div>Booking Subcategory: {booking.subcategory}</div>
                                 <div>Price: {booking.price}</div>
                                 <div>Booking Date: {booking.date} at {booking.time}</div>
-                                <div>Additional Imformation: {booking.additional_info}
+                                <div>Additional Imformation: {booking.additional_information}</div>
                                 <button 
                                     onClick={() => handleDeleteBooking(booking.id)} 
                                     className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
@@ -216,6 +216,7 @@ const AdminDashboard = () => {
                         ))}
                     </div>
                 </section>
+            
             )}
 
             {/* Feedback List */}

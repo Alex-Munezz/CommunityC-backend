@@ -21,10 +21,8 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'default_secret_key')
 
 # PostgreSQL database configuration
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-    'DATABASE_URL',
-    'postgresql://postgres:munezz456@localhost:5432/communityc'
-)
+app.config["SQLALCHEMY_DATABASE_URI"] = 'postgresql://root:VljBVKm2PuBUEymAn5ReM3SurNz6QcRt@dpg-cs1duc23esus739e4ivg-a.oregon-postgres.render.com/communitycdb_hrog'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize JWT
