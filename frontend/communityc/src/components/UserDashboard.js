@@ -43,7 +43,7 @@ const UserDashboard = () => {
     const fetchUserBookings = async (userId) => {
         try {
             const token = localStorage.getItem('access_token'); // Get token to send with request
-            const response = await fetch(`http://127.0.0.1:5000/bookings/user/${userId}`, {
+            const response = await fetch(`/bookings/user/${userId}`, {
                 headers: { 
                     'Authorization': `Bearer ${token}` // Include the token
                 }
@@ -67,7 +67,7 @@ const UserDashboard = () => {
         try {
             const token = localStorage.getItem('access_token');
             const userId = updatedDetails.id; // Assume userDetails has an id
-            const response = await fetch(`http://127.0.0.1:5000/users/${userId}`, {
+            const response = await fetch(`/users/${userId}`, {
                 method: 'PUT',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -86,7 +86,7 @@ const UserDashboard = () => {
     const handleUpdateBooking = async (bookingId) => {
         try {
             const token = localStorage.getItem('access_token');
-            const response = await fetch(`http://127.0.0.1:5000/bookings/${bookingId}`, {
+            const response = await fetch(`/bookings/${bookingId}`, {
                 method: 'PUT',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -105,7 +105,7 @@ const UserDashboard = () => {
     const handleDeleteBooking = async (bookingId) => {
         try {
             const token = localStorage.getItem('access_token');
-            const response = await fetch(`http://127.0.0.1:5000/bookings/${bookingId}`, { 
+            const response = await fetch(`/bookings/${bookingId}`, { 
                 method: 'DELETE',
                 headers: { 
                     'Authorization': `Bearer ${token}`, // Include the token
