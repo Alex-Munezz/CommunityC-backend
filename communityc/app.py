@@ -1,5 +1,6 @@
 import os
 from flask import Flask, request, jsonify, render_template
+from flask_bcrypt import Bcrypt
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
@@ -22,6 +23,8 @@ app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'default_secret_
 
 # PostgreSQL database configuration
 app.config["SQLALCHEMY_DATABASE_URI"] = 'postgresql://root:VljBVKm2PuBUEymAn5ReM3SurNz6QcRt@dpg-cs1duc23esus739e4ivg-a.oregon-postgres.render.com/communitycdb_hrog'
+# 'postgresql://postgres:munezz456@localhost:5432/communityc'
+
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -166,15 +169,20 @@ def login():
         # Create access token with user id and role
         access_token = create_access_token(
             identity={
-                'id': user.id
+                'id': user.id,
+                'role': user.role  # Include the role in the token payload
             },
             expires_delta=timedelta(minutes=30)
         )
+
+        # Return the access token and role to the frontend
         return jsonify({
             'access_token': access_token,
+            'role': user.role  # Send the role as part of the response
         }), 200
 
     return jsonify({"message": "Invalid credentials"}), 401
+
 
 # Create account route with JWT
 @app.route('/create_account', methods=['POST'])
@@ -183,6 +191,11 @@ def create_user():
 
     # Hash the user's password
     hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
+
+    # Set role with a default value
+    role = data.get('role')
+    if role is None:
+        role = 'user'
 
     # Create a new user instance with the hashed password and role
     new_user = User(
@@ -193,6 +206,7 @@ def create_user():
         email=data['email'],
         phone_number=data['phone_number'],
         location=data['location'],
+        role=role
     )
 
     try:
@@ -200,7 +214,7 @@ def create_user():
         db.session.commit()
 
         # Create JWT token with user ID and role
-        access_token = create_access_token(identity={'id': new_user.id})
+        access_token = create_access_token(identity={'id': new_user.id, 'role': new_user.role})
 
         # Send confirmation email
         msg = Message(
@@ -215,12 +229,14 @@ def create_user():
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
 
+
+
 # Get all users
 @app.route('/users', methods=['GET'])
 def get_users():
     users = User.query.all()
     user_list = [{'id': user.id, 'firstname': user.firstname, 'lastname': user.lastname, 'username': user.username,
-                 'email': user.email,'location':user.location, 'phone_number': user.phone_number} for user in users]
+                 'email': user.email,'location':user.location, 'phone_number': user.phone_number, 'role':user.role} for user in users]
     return jsonify(user_list)
 
 # Get a specific user by ID
@@ -235,7 +251,8 @@ def get_user(id):
             'username': user.username,
             'email': user.email,
             'phone_number': user.phone_number,
-            "location" : user.location
+            "location" : user.location,
+            'role':user.role
         })
     return jsonify({'message': 'User not found'}), 404
 
@@ -577,7 +594,7 @@ def create_booking():
             subcategory=','.join(data['subcategory']) if isinstance(data['subcategory'], list) else data['subcategory'],
             price=data['price'],
             additional_info=data.get('additional_info'),
-            user_id=current_user['id']  # Correct user_id assignment
+            user_id=current_user['id'] 
         )
 
         # Add the booking to the database
@@ -865,16 +882,23 @@ def delete_feedback(feedback_id):
 @app.route('/service-providers', methods=['POST'])
 def create_service_provider():
     data = request.json
+
+    # Hash the password before saving it
+    hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
+
     new_provider = ServiceProvider(
         name=data['name'],
         phone_number=data['phone_number'],
         email=data['email'],
         service_id=data['service_id'],
-        location=data['location']
+        location=data['location'],
+        password=hashed_password  # Store the hashed password
     )
+
     db.session.add(new_provider)
     db.session.commit()
-    return jsonify({"msg": "Service provider created", "provider": new_provider.id}), 201
+    
+    return jsonify({"msg": "Service provider created", "provider": new_provider.id}), 200
 
 # Route to get all service providers
 @app.route('/service-providers', methods=['GET'])
@@ -895,7 +919,7 @@ def get_service_providers():
 
 
 # Route to get a specific service provider by ID
-@app.route('/service_providers/<int:provider_id>', methods=['GET'])
+@app.route('/service-providers/<int:provider_id>', methods=['GET'])
 def get_service_provider(provider_id):
     provider = ServiceProvider.query.get_or_404(provider_id)
     provider_data = {
@@ -909,7 +933,7 @@ def get_service_provider(provider_id):
     return jsonify(provider_data), 200
 
 # Route to update a service provider
-@app.route('/service_providers/<int:provider_id>', methods=['PUT'])
+@app.route('/service-providers/<int:provider_id>', methods=['PUT'])
 def update_service_provider(provider_id):
     provider = ServiceProvider.query.get_or_404(provider_id)
     data = request.json
@@ -924,12 +948,82 @@ def update_service_provider(provider_id):
     return jsonify({"msg": "Service provider updated"}), 200
 
 # Route to delete a service provider
-@app.route('/service_providers/<int:provider_id>', methods=['DELETE'])
+@app.route('/service-providers/<int:provider_id>', methods=['DELETE'])
 def delete_service_provider(provider_id):
     provider = ServiceProvider.query.get_or_404(provider_id)
     db.session.delete(provider)
     db.session.commit()
     return jsonify({"msg": "Service provider deleted"}), 200
+
+@app.route('/service-provider/bookings', methods=['GET'])
+@jwt_required()  # Protect the route with JWT authentication
+def get_provider_bookings():
+    # Get the service provider ID from the access token
+    current_user = get_jwt_identity()  # This retrieves the identity from the token
+    service_provider_id = current_user.get('service_provider_id')  # Use .get() to avoid KeyError
+
+    if not service_provider_id:
+        return jsonify({"error": "Service provider ID not found in token"}), 401
+
+    # Fetch the service provider
+    service_provider = ServiceProvider.query.get(service_provider_id)
+
+    if not service_provider:
+        return jsonify({"error": "Service provider not found"}), 404
+
+    # Fetch bookings related to the service ID of the provider
+    provider_bookings = Booking.query.filter_by(service_id=service_provider.service_id).all()
+
+    # Prepare the response
+    provider_bookings_list = []
+    for provider_booking in provider_bookings:
+        provider_bookings_list.append({
+            "id": provider_booking.id,
+            "service_name": provider_booking.service_name,
+            "name": provider_booking.name,
+            "email": provider_booking.email,
+            "phone_number": provider_booking.phone_number,
+            "county": provider_booking.county,
+            "town": provider_booking.town,
+            "street": provider_booking.street,
+            "date": provider_booking.date,
+            "time": provider_booking.time,
+            "subcategory": provider_booking.subcategory,
+            "price": provider_booking.price,
+            "additional_info": provider_booking.additional_info
+        })
+
+    return jsonify(provider_bookings_list), 200
+
+
+@app.route('/service-provider/login', methods=['POST'])
+def provider_login():
+    data = request.get_json()
+    name = data.get('name')
+    password = data.get('password')
+
+    # Fetch the provider by name
+    service_provider = ServiceProvider.query.filter_by(name=name).first()
+    
+    # Validate credentials
+    if service_provider and check_password_hash(service_provider.password, password):
+        # Create access token with provider id
+        access_token = create_access_token(
+            identity={
+                'service_provider_id': service_provider.id,  # Make sure this key is correct
+            },
+            expires_delta=timedelta(minutes=30)
+        )
+
+        # Return the access token and provider ID to the frontend
+        return jsonify({
+            'access_token': access_token,
+            'provider_id': service_provider.id
+        }), 200
+
+    return jsonify({"message": "Invalid credentials"}), 401
+
+
 
 if __name__ == '__main__':
   app.run(debug=True, port=5000)

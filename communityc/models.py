@@ -11,8 +11,10 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(128), nullable=False)  # Consider hashing
     email = db.Column(db.String(120), unique=True, nullable=False)
-    phone_number = db.Column(db.String(15), unique=True, nullable=False) 
+    phone_number = db.Column(db.String(15), unique=True, nullable=False)
     location = db.Column(db.String(50), nullable=False)
+    role = db.Column(db.String(20), nullable=True, default='user')  # New role column
+
     
 class Service(db.Model):
     __tablename__ = 'service'
@@ -45,7 +47,9 @@ class ServiceProvider(db.Model):
     phone_number = db.Column(db.String(15), nullable=False)
     email = db.Column(db.String(120), nullable=False, unique=True)
     service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=False)
-    location = db.Column(db.String(100), nullable=False)
+    location = db.Column(db.String(100), nullable=False)  # Removed trailing comma
+    password = db.Column(db.String(128), nullable=False)
+
 
 class Pricing(db.Model):
     __tablename__ = 'pricing'
@@ -86,13 +90,11 @@ class Booking(db.Model):
     subcategory = db.Column(db.String(100), nullable=False)
     price = db.Column(db.String(10), nullable=False)
     additional_info = db.Column(db.String(200))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    service_id = db.Column(db.Integer, db.ForeignKey('service.id'), nullable=True)
 
-    # Adding user_id to link booking to user
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Assuming the User model has an id field
-
-    # Optional: Establish relationship with User model
-    user = db.relationship('User', backref='bookings')  # Assuming you have a User model
-
+    user = db.relationship('User', backref='bookings') 
+    service = db.relationship('Service',backref='bookings')
 
 class Review(db.Model):
     __tablename__ ='review'
