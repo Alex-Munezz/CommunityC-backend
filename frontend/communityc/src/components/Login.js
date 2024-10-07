@@ -24,9 +24,17 @@ const Login = () => {
         const data = await response.json();
 
         if (data.access_token) {
-          // Save both token and role via the login function
+          // Save the token via the login function
           login(data.access_token);
-          navigate('/'); // Navigate to the dashboard or another page
+
+          // Check the user's role and navigate accordingly
+          if (data.role === 'admin') {
+            navigate('/admin'); // Navigate to admin dashboard
+          } else if (data.role === 'user') {
+            navigate('/'); // Navigate to user dashboard or homepage
+          } else {
+            setError('Unknown role received.');
+          }
         } else {
           setError('Login failed. No access token received.');
           console.error('Access token is missing in the response');
@@ -73,6 +81,10 @@ const Login = () => {
           <br /><br />
           <p className="text-gray-600">Don't have an account?
             <Link to='/signup' className="text-blue-500 hover:text-blue-700 font-semibold ml-1">Sign Up</Link>
+          </p>
+          <br />
+          <p className="text-gray-600">Are you a service provider?
+            <Link to='/provider-login' className="text-blue-500 hover:text-blue-700 font-semibold ml-1">Log in here</Link>
           </p>
         </form>
       </div>
