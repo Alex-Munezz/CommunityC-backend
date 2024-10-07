@@ -11,6 +11,7 @@ const BookingPage = () => {
     email: '',
     phone_number: '',
     service_name: name || '',
+    service_id: '',
     date: '',
     time: '',
     additional_info: '',
@@ -43,6 +44,23 @@ const BookingPage = () => {
     }
   };
     
+  const fetchServiceId = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/services?name=${formData.service_name}`); // Assuming the endpoint is /services
+      if (!response.ok) throw new Error('Failed to fetch service ID');
+      const data = await response.json();
+      setFormData((prevData) => ({
+        ...prevData,
+        service_id: data.id, // Assuming the response contains an 'id' field for the service
+      }));
+    } catch (error) {
+      console.error('Error fetching service ID:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   
 
   const fetchServicePricing = async (selectedSubcategoryId) => {
@@ -80,6 +98,7 @@ const BookingPage = () => {
 
   useEffect(() => {
     if (formData.service_name) {
+      fetchServiceId(); // Fetch the service ID based on the service name
       fetchSubcategories();
     }
   }, [formData.service_name]);
@@ -202,6 +221,7 @@ const BookingPage = () => {
       email: formData.email,
       phone_number: formData.phone_number,
       service_name: formData.service_name,
+      service_id: formData.service_id,
       date: formData.date,
       time: formData.time,
       additional_info: formData.additional_info,

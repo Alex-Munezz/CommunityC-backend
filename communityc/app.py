@@ -593,7 +593,8 @@ def create_booking():
             subcategory=','.join(data['subcategory']) if isinstance(data['subcategory'], list) else data['subcategory'],
             price=data['price'],
             additional_info=data.get('additional_info'),
-            user_id=current_user['id'] 
+            user_id=current_user['id'],
+            service_id = data.get('service_id')
         )
 
         # Add the booking to the database
