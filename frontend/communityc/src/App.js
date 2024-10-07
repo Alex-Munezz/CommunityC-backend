@@ -14,6 +14,8 @@ import { useAuth } from './components/AuthContext';
 import AdminDashboard from './components/AdminDashboard';
 import UserDashboard from './components/UserDashboard';
 import Terms from './components/Terms';
+import ProviderLogin from './components/ProviderLogin';
+import ProviderDashboard from './components/ProviderDashboard';
 
 function App() {
   const { isAuthenticated } = useAuth();
@@ -33,6 +35,8 @@ function App() {
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/dashboard" element={<UserDashboard />} />
             <Route path="/terms" element={<Terms />} />
+            <Route path="/provider-login" element={<ProviderLogin />} />
+            <Route path="/provider-dashboard" element={<ProviderDashboard />} />
           </Routes>
         </div>
         <Footer />
